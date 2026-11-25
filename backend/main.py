@@ -31,7 +31,8 @@ def allowed_target(value):
         if addr.version != 4: raise ValueError('Only IPv4 supported in MVP')
     except ValueError:
         raise HTTPException(400,'Enter a single IPv4 address (no hostnames, URLs, or ranges)')
-    allow=[v.strip() for v in os.getenv('ALLOWED_TARGETS','127.0.0.1').split(',') if v.strip()]
+    allow=[v.strip() for v in os.getenv('ALLOWED_TARGETS','').split(',') if v.strip()]
+    if not allow: raise HTTPException(503,'Server scan scope is not configured')
     if value not in allow: raise HTTPException(403,'This target is not on the server-side authorized allowlist')
     return value
 
