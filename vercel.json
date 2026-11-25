@@ -1,1 +1,1 @@
-{"cleanUrls":true,"trailingSlash":false}
+{"cleanUrls":true,"trailingSlash":false,"functions":{"api/scans.py":{"maxDuration":30},"api/health.py":{"maxDuration":10}},"rewrites":[{"source":"/health","destination":"/api/health"},{"source":"/scans","destination":"/api/scans"},{"source":"/scans/:id","destination":"/api/scans/:id"}]}
