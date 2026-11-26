@@ -33,6 +33,53 @@ def scoped_ip(value):
         raise PermissionError("Target is not on the authorized server allowlist.")
     return str(address)
 
+def scoped_web_target(value):
+    raw = str(value or "").strip()
+    if not raw or len(raw) > 253 or "/" in raw or "@" in raw or ":" in raw:
+        raise ValueError("Enter a domain only, such as sixermediaclub.com.")
+    try:
+        address = ipaddress.ip_address(raw)
+    except ValueError:
+        address = None
+    if address is not None:
+        target = scoped_ip(raw)
+        return target, [target]
+    try:
+        host = raw.rstrip(".").encode("idna").decode("ascii").lower()
+    except UnicodeError:
+        raise ValueError("Enter a valid domain name.")
+    label = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+    if not re.fullmatch(label + r"(?:\." + label + r")+", host):
+        raise ValueError("Enter a valid public domain name.")
+    allowed = {item.strip().rstrip(".").encode("idna").decode("ascii").lower()
+               for item in os.getenv("ALLOWED_TARGETS", "").split(",") if item.strip()}
+    if not allowed:
+        raise RuntimeError("Server scan scope is not configured.")
+    if host not in allowed:
+        raise PermissionError("Domain is not on the authorized server allowlist.")
+    try:
+        addresses = sorted({item[4][0] for item in socket.getaddrinfo(host, 443, socket.AF_INET, socket.SOCK_STREAM)})
+    except OSError:
+        raise ValueError("The approved domain did not resolve to an IPv4 address.")
+    if not addresses or any(not ipaddress.ip_address(item).is_global for item in addresses):
+        raise PermissionError("The domain must resolve only to public IPv4 addresses.")
+    return host, addresses
+
+class PinnedHTTPConnection(http.client.HTTPConnection):
+    def __init__(self, host, address, port, timeout=3):
+        super().__init__(host, port, timeout=timeout)
+        self.address = address
+    def connect(self):
+        self.sock = socket.create_connection((self.address, self.port), self.timeout)
+
+class PinnedHTTPSConnection(PinnedHTTPConnection):
+    def __init__(self, host, address, port, timeout=3):
+        super().__init__(host, address, port, timeout)
+        self.context = ssl.create_default_context()
+    def connect(self):
+        raw = socket.create_connection((self.address, self.port), self.timeout)
+        self.sock = self.context.wrap_socket(raw, server_hostname=self.host)
+
 def port_scan(target):
     services, findings = [], []
     for port in PORTS:
@@ -50,15 +97,16 @@ def port_scan(target):
                         "Open port observed; no exploitation attempted.")
     return services, findings
 
-def web_headers(target):
+def web_headers(target, addresses):
     services, findings = [], []
     for port in (80, 443):
         connection = None
         try:
+            address = addresses[0]
             if port == 443:
-                connection = http.client.HTTPSConnection(target, port, timeout=2, context=ssl.create_default_context())
+                connection = PinnedHTTPSConnection(target, address, port)
             else:
-                connection = http.client.HTTPConnection(target, port, timeout=2)
+                connection = PinnedHTTPConnection(target, address, port)
             connection.request("HEAD", "/", headers={"User-Agent":"Nexora-VulnScan/1.0"})
             response = connection.getresponse()
             services.append({"port":port,"protocol":"tcp","service":"https" if port == 443 else "http","product":"","version":""})
@@ -196,13 +244,14 @@ def analyze(data):
         raise ValueError("Choose one of the five supported scanner modules.")
     findings, services, events = [], [], []
     if module in ("network", "web"):
-        target = scoped_ip(data.get("target", ""))
         if module == "network":
+            target = scoped_ip(data.get("target", ""))
             services, findings = port_scan(target)
             detail = "Fixed TCP port list; no exploitation."
         else:
-            services, findings = web_headers(target)
-            detail = "HTTP HEAD security-header checks on allowed IP ports 80 and 443; no crawling or exploitation."
+            target, addresses = scoped_web_target(data.get("target", ""))
+            services, findings = web_headers(target, addresses)
+            detail = "HTTP HEAD security-header checks on the approved hostname at ports 80 and 443; no crawling or exploitation."
             if not services:
                 events.append({"timestamp":now(),"event":"web_check.incomplete","details":"No reachable HTTP service or TLS verification failed."})
         label = target
@@ -273,8 +322,11 @@ class handler(BaseHTTPRequestHandler):
             if not isinstance(data, dict) or data.get("consent") is not True:
                 raise ValueError("Confirm that you are authorized to scan this target or content.")
             module = data.get("module", "network")
+            if module == "network":
+                scoped_ip(data.get("target", ""))
+            elif module == "web":
+                scoped_web_target(data.get("target", ""))
             if module in ("network", "web"):
-                target = scoped_ip(data.get("target", ""))
                 with LOCK:
                     current = time.monotonic()
                     if current - LAST_NETWORK_SCAN < 10:
