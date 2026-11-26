@@ -1,7 +1,7 @@
 'use strict';
 const MODULES={
  network:{name:'Network Security',icon:'⌘',desc:'Check a fixed list of TCP ports on an authorized public IP.',engine:'Fixed-list TCP connect',state:'Available',detail:'Checks 14 fixed TCP ports on one public IPv4 address in the server allowlist. No exploitation.'},
- web:{name:'Web Application',icon:'◎',desc:'Check basic HTTP security headers on an authorized public IP.',engine:'HTTP HEAD header checks',state:'Available',detail:'Sends a single HEAD request to ports 80 and 443 on one allowlisted public IP. No crawling or exploitation.'},
+ web:{name:'Web Application',icon:'◎',desc:'Check basic HTTP security headers on an authorized domain or public IP.',engine:'HTTP HEAD header checks',state:'Available',detail:'Sends one HEAD request to the approved hostname on ports 80 and 443, preserving HTTPS hostname verification. No crawling or exploitation.'},
  code:{name:'Code & Dependencies',icon:'⌘',desc:'Check pasted source for risky patterns and exact-version dependency advisories.',engine:'Static rules · OSV',state:'Available',detail:'Paste your source or a requirements.txt/package.json manifest. Exact pinned dependencies are checked against OSV.'},
  container:{name:'Container Security',icon:'▣',desc:'Review Dockerfiles for common configuration risks.',engine:'Dockerfile policy checks',state:'Available',detail:'Checks Dockerfile text for common hardening issues. It does not build or inspect image layers.'},
  cloud:{name:'Cloud & IaC',icon:'☁',desc:'Check Terraform, YAML and JSON for common risky settings.',engine:'Static IaC policy checks',state:'Available',detail:'Scans pasted Terraform/YAML/JSON text for common policy patterns. It does not connect to cloud accounts.'}
