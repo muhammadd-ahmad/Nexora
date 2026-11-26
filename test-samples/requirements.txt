@@ -1,0 +1,2 @@
+# Pinned sample package for Nexora's OSV lookup. Advisory results can change.
+requests==2.19.0
